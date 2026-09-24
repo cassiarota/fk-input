@@ -14,7 +14,7 @@ FK Input is an experimental Android keyboard focused on optional homophone sugge
 
 ## Install and use
 
-The project targets Android 10+ (`minSdk 29`) and currently builds an ARM64 APK. No release APK or signing material is committed to this repository. To build a debug APK, follow [Build and test](#build-and-test), then install `app/build/outputs/apk/debug/app-debug.apk` on an ARM64 device.
+The project targets Android 10+ (`minSdk 29`) and currently builds an ARM64 APK. [Download the signed ARM64 pre-release APK](https://github.com/cassiarota/fk-input/releases/tag/v0.1.0), or follow [Build and test](#build-and-test) to build a debug APK and install `app/build/outputs/apk/debug/app-debug.apk`. No APK or signing material is committed to Git.
 
 Open FK Input, enable it in Android's input-method settings, and select it as the current keyboard. Android shows its standard warning when enabling any third-party keyboard. Portrait defaults to nine-key; landscape defaults to full QWERTY. Use the keyboard toolbar to change either layout.
 

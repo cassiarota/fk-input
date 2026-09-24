@@ -14,7 +14,7 @@ FK 输入法是一款实验性的 Android 输入法，重点是为中文拼音�
 
 ## 安装与使用
 
-项目支持 Android 10 起（`minSdk 29`），目前只构建 ARM64 APK。仓库不提交发布 APK 或签名材料。按照[构建与测试](#构建与测试)生成调试包后，在 ARM64 设备安装 `app/build/outputs/apk/debug/app-debug.apk`。
+项目支持 Android 10 起（`minSdk 29`），目前只构建 ARM64 APK。可[下载已签名的 ARM64 预发布安装包](https://github.com/cassiarota/fk-input/releases/tag/v0.1.0)，也可按照[构建与测试](#构建与测试)生成调试包，在 ARM64 设备安装 `app/build/outputs/apk/debug/app-debug.apk`。Git 不提交 APK 或签名材料。
 
 打开 FK 输入法，在 Android 输入法设置中启用并选择它。启用第三方输入法时，Android 会显示标准安全提示。竖屏默认九键，横屏默认全键，可用键盘工具栏分别切换。
 
