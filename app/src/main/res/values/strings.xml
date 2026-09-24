@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FK 输入法</string>
+    <string name="add_sensitive_word">加入敏感词库</string>
+    <string name="invalid_sensitive_word">请选择不超过 100 字的单行词或短语</string>
+    <string name="sensitive_word_added">已加入本地敏感词库</string>
+    <string name="sensitive_word_exists">该词已在本地敏感词库中</string>
+    <string name="sensitive_word_failed">无法写入本地敏感词库</string>
 </resources>

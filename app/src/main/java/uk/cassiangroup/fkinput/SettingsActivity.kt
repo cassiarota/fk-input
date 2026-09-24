@@ -21,6 +21,7 @@ import android.widget.TextView
 import android.widget.Toast
 import uk.cassiangroup.fkinput.data.InputPreferences
 import uk.cassiangroup.fkinput.data.InputStore
+import uk.cassiangroup.fkinput.data.SensitiveWordFile
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
@@ -36,6 +37,8 @@ class SettingsActivity : Activity() {
         super.onCreate(savedInstanceState)
         store = InputStore(this)
         preferences = InputPreferences(this)
+        runCatching { SensitiveWordFile(this).initialize() }
+            .onFailure { toast("本地敏感词库初始化失败：${it.message}") }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(24), dp(20), dp(32))
@@ -107,8 +110,10 @@ class SettingsActivity : Activity() {
             toast("已清除")
         })
 
-        root.addView(section("敏感词列表"))
-        root.addView(info("仅第二行正常候选可长按整词加入。词库对所有应用生效。"))
+        root.addView(section("本地敏感词库文件"))
+        root.addView(info("在支持系统文本选择菜单的聊天应用中，长按消息选中文本，再点“加入敏感词库”保存到应用私有文件。此文件暂不参与候选生成或消息过滤。"))
+        root.addView(section("谐音改写词条"))
+        root.addView(info("长按第二行正常候选可把整词加入谐音改写词条；此处词条对所有应用的候选生效。"))
         val newTerm = EditText(this).apply {
             hint = "输入词或短语"
             setSingleLine(true)

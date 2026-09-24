@@ -8,7 +8,8 @@ FK Input is an experimental Android keyboard focused on optional homophone sugge
 
 - Nine-key and full QWERTY Pinyin layouts, direct English input, numbers, and punctuation. Portrait and landscape remember their layout choices separately.
 - Two independently scrollable Chinese candidate rows: homophone rewrites above, ordinary Pinyin candidates below. Up to five candidates are initially visible in each row.
-- A local, editable global term list. A complete matching term is rewritten character by character; long-pressing an ordinary candidate adds the whole term without submitting it.
+- A local, editable homophone-rewrite term list. A complete matching term is rewritten character by character; long-pressing an ordinary candidate adds the whole term without submitting it.
+- A separate local sensitive-word file seeded with 2,482 entries. In chat apps that expose Android's standard text-selection menu, long-press a message, select text, and choose “加入敏感词库” to save it. This file does not yet affect candidates or filter messages.
 - A local Pinyin preference queue shared by the two layouts. Choosing an ordinary candidate moves it forward by exactly one position; homophone and speech selections do not train the queue.
 - Optional push-to-talk recognition through a user-configured, compatible WSS service. The keyboard has no built-in service address or credential.
 
@@ -19,6 +20,8 @@ The project targets Android 10+ (`minSdk 29`) and currently builds an ARM64 APK.
 Open FK Input, enable it in Android's input-method settings, and select it as the current keyboard. Android shows its standard warning when enabling any third-party keyboard. Portrait defaults to nine-key; landscape defaults to full QWERTY. Use the keyboard toolbar to change either layout.
 
 In Chinese mode, Space, punctuation, and Enter submit the first homophone candidate before the following character/action. If a listed term has no valid homophone, the original term is **not** submitted automatically; choose an ordinary candidate explicitly. Manage terms, UTF-8 import/export, and learning reset in the app's settings. The bundled example terms are removable.
+
+The first app or keyboard launch copies the bundled sensitive-word list to the app-private `files/sensitive-words.txt`. Later launches preserve the user file. The entry appears through Android's `PROCESS_TEXT` selection action when the chat app supports it. The app shows the selected phrase for confirmation, and duplicate entries leave the file unchanged. See the [source and license notes](app/src/main/assets/data/SENSITIVE-WORDS-SOURCES.md).
 
 Password fields disable suggestions, learning, and speech input.
 
@@ -46,7 +49,7 @@ GitHub Actions signs with the encrypted repository secrets `FK_SIGNING_KEYSTORE_
 
 ## Current validation
 
-The Android 36 ARM64 emulator has been used to verify installation, keyboard registration, portrait nine-key and landscape QWERTY candidates, password-field behavior, and long-press term insertion. JVM tests cover candidate rules and ordering; device tests cover SQLite persistence and mock-WebSocket speech events. A physical-phone test and real-audio test with a user-configured service are still pending.
+The Android 36 ARM64 emulator has been used to verify installation, keyboard registration, portrait nine-key and landscape QWERTY candidates, password-field behavior, and long-press candidate insertion. JVM tests cover candidate rules, ordering, and the sensitive-word file; device tests cover SQLite persistence, mock-WebSocket speech events, and confirmation, writing, and deduplication through the system text-selection action. Whether a chat app displays this system action depends on its selection UI and has not been checked app by app. A physical-phone test and real-audio test with a user-configured service are still pending.
 
 ## Licenses
 

@@ -1,5 +1,10 @@
 FK Input third-party notices
 
+The default sensitive-word file includes entries from fwwdn/sensitive-stop-words
+(Apache-2.0) and konsheng/Sensitive-lexicon (MIT). Pinned source files and
+commits are listed in data/SENSITIVE-WORDS-SOURCES.md; their license texts are
+packaged as LICENSE.sensitive-stop-words and LICENSE.Sensitive-lexicon.
+
 The following BSD-3-Clause components are statically linked:
   librime: Copyright (c) 2014, RIME Developers
   glog: Copyright (c) 2024, Google Inc.

@@ -29,6 +29,7 @@ import uk.cassiangroup.fkinput.core.WordCandidate
 import uk.cassiangroup.fkinput.core.sensitivePositions
 import uk.cassiangroup.fkinput.data.InputPreferences
 import uk.cassiangroup.fkinput.data.InputStore
+import uk.cassiangroup.fkinput.data.SensitiveWordFile
 import uk.cassiangroup.fkinput.voice.StreamingAsr
 import java.util.concurrent.Executors
 
@@ -69,6 +70,8 @@ class FkInputMethodService : InputMethodService() {
         preferences = InputPreferences(this)
         layout = preferences.layout(isLandscape())
         worker.execute {
+            runCatching { SensitiveWordFile(this).initialize() }
+                .onFailure { main.post { notice("本地敏感词库初始化失败") } }
             runCatching {
                 val loadedEngine = PinyinEngine(this)
                 val loadedRules = CandidateRules.fromAssets(this)

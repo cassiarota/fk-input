@@ -13,6 +13,8 @@
 | Unihan 17.0.0 `kMandarin` | Pronunciations converted to `readings.tsv` at build time | Unicode License v3 | [Unicode Unihan data](https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip) |
 | OkHttp / Okio | WSS client | Apache-2.0 | [square/okhttp](https://github.com/square/okhttp) / [square/okio](https://github.com/square/okio); OkHttp 4.12.0 |
 | Kotlin standard library | Android client | Apache-2.0 | [JetBrains/kotlin](https://github.com/JetBrains/kotlin); version 2.2.20 |
+| sensitive-stop-words | Bundled default sensitive-word entries | Apache-2.0 | [fwwdn/sensitive-stop-words](https://github.com/fwwdn/sensitive-stop-words), commit `a7d06bb1c321e669943b6841570d9da6dad8ce2b` |
+| Sensitive-lexicon | Bundled default sensitive-word entries | MIT | [konsheng/Sensitive-lexicon](https://github.com/konsheng/Sensitive-lexicon), commit `d967c30b053fa40b06c5a0dddf0be493f2dfae46` |
 
 The ARM64 static libraries are fetched from [fcitx5-android/prebuilt](https://github.com/fcitx5-android/prebuilt/tree/e9a277e3f3151f7b978945a3f8701285146d609d) at commit `e9a277e3f3151f7b978945a3f8701285146d609d`. This pins the prebuilt artifacts, not the source commits of every upstream library.
 
