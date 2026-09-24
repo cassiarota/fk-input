@@ -1,0 +1,98 @@
+name: Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, for example 0.1.1 (manual runs do not publish)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Resolve version
+        id: version
+        shell: bash
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          MANUAL_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            [[ "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+            version="${TAG_NAME#v}"
+          else
+            version="$MANUAL_VERSION"
+          fi
+          [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || exit 1
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          (( ${#major} <= 4 && ${#minor} <= 3 && ${#patch} <= 3 )) || exit 1
+          [[ "$major" == 0 || "$major" != 0* ]] || exit 1
+          [[ "$minor" == 0 || "$minor" != 0* ]] || exit 1
+          [[ "$patch" == 0 || "$patch" != 0* ]] || exit 1
+          (( major <= 2000 && minor < 1000 && patch < 1000 )) || exit 1
+          code=$((major * 1000000 + minor * 1000 + patch))
+          (( code > 0 && code <= 2100000000 )) || exit 1
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - name: Install pinned Android components
+        run: sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.0.13004108' 'cmake;3.22.1'
+      - name: Fetch pinned native dependencies
+        run: ./scripts/fetch-native.sh
+      - name: Run unit tests and build debug APK
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CODE: ${{ steps.version.outputs.code }}
+        run: ./gradlew "-PfkVersion=$VERSION" "-PfkVersionCode=$CODE" :app:testDebugUnitTest :app:assembleDebug
+      - name: Sign release APK
+        env:
+          FK_SIGNING_KEYSTORE_B64: ${{ secrets.FK_SIGNING_KEYSTORE_B64 }}
+          FK_SIGNING_ALIAS: ${{ secrets.FK_SIGNING_ALIAS }}
+          FK_SIGNING_PASSWORD: ${{ secrets.FK_SIGNING_PASSWORD }}
+          FK_RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          FK_RELEASE_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          set -euo pipefail
+          : "${FK_SIGNING_KEYSTORE_B64:?Missing signing keystore secret}"
+          : "${FK_SIGNING_ALIAS:?Missing signing alias secret}"
+          : "${FK_SIGNING_PASSWORD:?Missing signing password secret}"
+          export FK_SIGNING_KEYSTORE="$RUNNER_TEMP/fk-input-release.jks"
+          printf '%s' "$FK_SIGNING_KEYSTORE_B64" | base64 --decode > "$FK_SIGNING_KEYSTORE"
+          chmod 600 "$FK_SIGNING_KEYSTORE"
+          ./scripts/sign-release.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fk-input-${{ steps.version.outputs.version }}-apks
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            release/fk-input-${{ steps.version.outputs.version }}-arm64.apk
+          if-no-files-found: error
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "release/fk-input-${VERSION}-arm64.apk" \
+            --verify-tag --generate-notes --latest --title "FK Input ${VERSION}"

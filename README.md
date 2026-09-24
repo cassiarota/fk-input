@@ -14,7 +14,7 @@ FK 输入法是一款实验性的 Android 输入法，重点是为中文拼音�
 
 ## 安装与使用
 
-项目支持 Android 10 起（`minSdk 29`），目前只构建 ARM64 APK。可[下载已签名的 ARM64 预发布安装包](https://github.com/cassiarota/fk-input/releases/tag/v0.1.0)，也可按照[构建与测试](#构建与测试)生成调试包，在 ARM64 设备安装 `app/build/outputs/apk/debug/app-debug.apk`。Git 不提交 APK 或签名材料。
+项目支持 Android 10 起（`minSdk 29`），目前只构建 ARM64 APK。可在 [Releases 页面](https://github.com/cassiarota/fk-input/releases)下载已签名安装包，也可按照[构建与测试](#构建与测试)生成调试包，在 ARM64 设备安装 `app/build/outputs/apk/debug/app-debug.apk`。Git 不提交 APK 或签名材料。
 
 打开 FK 输入法，在 Android 输入法设置中启用并选择它。启用第三方输入法时，Android 会显示标准安全提示。竖屏默认九键，横屏默认全键，可用键盘工具栏分别切换。
 
@@ -41,6 +41,8 @@ FK 输入法是一款实验性的 Android 输入法，重点是为中文拼音�
 原生依赖脚本从固定提交获取 ARM64 静态库，产物不纳入 Git。JNI 桥接代码为本项目原创，没有复用 Trime 客户端或 JNI。Rime 自身的用户词频学习已关闭，由本地 SQLite 队列控制候选顺序。
 
 发布签名密钥应放在仓库外。在本地环境或密钥管理器中设置 `FK_SIGNING_KEYSTORE`、`FK_SIGNING_ALIAS`、`FK_SIGNING_PASSWORD`，再运行 `./scripts/sign-release.sh`。不要把签名信息写入仓库文件或 shell 历史。生成的 `release/` APK 被 Git 忽略。
+
+GitHub Actions 使用仓库加密密钥 `FK_SIGNING_KEYSTORE_B64`、`FK_SIGNING_ALIAS`、`FK_SIGNING_PASSWORD` 签名。推送 `vX.Y.Z` 标签会运行单元测试、构建 Debug 和 Release APK，并把签名包发布为该版本的 GitHub Release，标记为 Latest。请为每个新版本使用新标签；版本号和 Android `versionCode` 由标签计算。也可从 Actions 手动输入版本运行构建，下载测试产物；手动运行不会创建 Release。Debug APK 与发布 APK 签名不同，不能直接覆盖安装彼此。
 
 ## 当前验证状态
 

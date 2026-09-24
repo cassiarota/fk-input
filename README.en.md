@@ -14,7 +14,7 @@ FK Input is an experimental Android keyboard focused on optional homophone sugge
 
 ## Install and use
 
-The project targets Android 10+ (`minSdk 29`) and currently builds an ARM64 APK. [Download the signed ARM64 pre-release APK](https://github.com/cassiarota/fk-input/releases/tag/v0.1.0), or follow [Build and test](#build-and-test) to build a debug APK and install `app/build/outputs/apk/debug/app-debug.apk`. No APK or signing material is committed to Git.
+The project targets Android 10+ (`minSdk 29`) and currently builds an ARM64 APK. Download a signed APK from [GitHub Releases](https://github.com/cassiarota/fk-input/releases), or follow [Build and test](#build-and-test) to build a debug APK and install `app/build/outputs/apk/debug/app-debug.apk`. No APK or signing material is committed to Git.
 
 Open FK Input, enable it in Android's input-method settings, and select it as the current keyboard. Android shows its standard warning when enabling any third-party keyboard. Portrait defaults to nine-key; landscape defaults to full QWERTY. Use the keyboard toolbar to change either layout.
 
@@ -41,6 +41,8 @@ Use JDK 17, Android Gradle Plugin 8.13.2, Gradle 8.13, Kotlin 2.2.20, Android SD
 The native fetch script downloads pinned ARM64 archives outside Git's tracked files. The JNI bridge is original to this project; no Trime client or JNI code is used. Rime's user-frequency learning is disabled so the local SQLite queue controls ordering.
 
 To sign a release build, keep your keystore outside the repository. Set `FK_SIGNING_KEYSTORE`, `FK_SIGNING_ALIAS`, and `FK_SIGNING_PASSWORD` in your local environment or secret manager, then run `./scripts/sign-release.sh`. Do not put signing values in tracked files or shell history. The resulting `release/` APK is ignored by Git.
+
+GitHub Actions signs with the encrypted repository secrets `FK_SIGNING_KEYSTORE_B64`, `FK_SIGNING_ALIAS`, and `FK_SIGNING_PASSWORD`. Pushing a `vX.Y.Z` tag runs unit tests, builds Debug and Release APKs, and publishes the signed APK as that version's GitHub Release marked Latest. Use a new tag for each version; the tag determines the version name and Android `versionCode`. You can also run the workflow manually from Actions to download test artifacts without publishing a Release. Debug and release APKs use different signing keys, so one cannot be installed as an update over the other.
 
 ## Current validation
 

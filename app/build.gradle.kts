@@ -3,6 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val fkVersion = providers.gradleProperty("fkVersion").orNull ?: "0.1.0"
+val fkVersionCode = providers.gradleProperty("fkVersionCode").orNull?.toInt() ?: 1
+require(fkVersion.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+")))
+require(fkVersionCode in 1..2_100_000_000)
+
 android {
     namespace = "uk.cassiangroup.fkinput"
     compileSdk = 36
@@ -12,8 +17,8 @@ android {
         applicationId = "uk.cassiangroup.fkinput"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = fkVersionCode
+        versionName = fkVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += "arm64-v8a"
