@@ -1,36 +1,36 @@
-# FK Input
+# FK 输入法
 
-[简体中文](README.zh-CN.md)
+[English](README.en.md)
 
-FK Input is an experimental Android keyboard focused on optional homophone suggestions for Chinese Pinyin. It does not guarantee that a particular game or chat service will accept a suggestion.
+FK 输入法是一款实验性的 Android 输入法，重点是为中文拼音提供可选的谐音候选。它不保证特定游戏或聊天服务一定接受这些文字。
 
-## Features
+## 功能
 
-- Nine-key and full QWERTY Pinyin layouts, direct English input, numbers, and punctuation. Portrait and landscape remember their layout choices separately.
-- Two independently scrollable Chinese candidate rows: homophone rewrites above, ordinary Pinyin candidates below. Up to five candidates are initially visible in each row.
-- A local, editable global term list. A complete matching term is rewritten character by character; long-pressing an ordinary candidate adds the whole term without submitting it.
-- A local Pinyin preference queue shared by the two layouts. Choosing an ordinary candidate moves it forward by exactly one position; homophone and speech selections do not train the queue.
-- Optional push-to-talk recognition through a user-configured, compatible WSS service. The keyboard has no built-in service address or credential.
+- 拼音九键、拼音全键盘、英文直输、数字和标点；横竖屏分别记住布局选择。
+- 两行可独立横滑的中文候选：上行谐音改写，下行普通拼音候选，每行首屏最多显示五项。
+- 本地全局词库。完整命中词条时逐字改写；长按下行正常候选可把整个词加入词库，不会同时提交文字。
+- 九键和全键共用本地拼音习惯队列。选中下行候选只前移一位；上行及语音选择不参与学习。
+- 可选的按住说话功能，连接用户自行配置的兼容 WSS 服务。应用内不预置服务地址或凭证。
 
-## Install and use
+## 安装与使用
 
-The project targets Android 10+ (`minSdk 29`) and currently builds an ARM64 APK. [Download the signed ARM64 pre-release APK](https://github.com/cassiarota/fk-input/releases/tag/v0.1.0), or follow [Build and test](#build-and-test) to build a debug APK and install `app/build/outputs/apk/debug/app-debug.apk`. No APK or signing material is committed to Git.
+项目支持 Android 10 起（`minSdk 29`），目前只构建 ARM64 APK。可[下载已签名的 ARM64 预发布安装包](https://github.com/cassiarota/fk-input/releases/tag/v0.1.0)，也可按照[构建与测试](#构建与测试)生成调试包，在 ARM64 设备安装 `app/build/outputs/apk/debug/app-debug.apk`。Git 不提交 APK 或签名材料。
 
-Open FK Input, enable it in Android's input-method settings, and select it as the current keyboard. Android shows its standard warning when enabling any third-party keyboard. Portrait defaults to nine-key; landscape defaults to full QWERTY. Use the keyboard toolbar to change either layout.
+打开 FK 输入法，在 Android 输入法设置中启用并选择它。启用第三方输入法时，Android 会显示标准安全提示。竖屏默认九键，横屏默认全键，可用键盘工具栏分别切换。
 
-In Chinese mode, Space, punctuation, and Enter submit the first homophone candidate before the following character/action. If a listed term has no valid homophone, the original term is **not** submitted automatically; choose an ordinary candidate explicitly. Manage terms, UTF-8 import/export, and learning reset in the app's settings. The bundled example terms are removable.
+中文模式下，空格、标点和回车会先提交上行第一个谐音候选。若命中词库但没有有效谐音，应用**不会自动提交原词**，需要手动选择下行候选。设置页可管理词条、导入导出 UTF-8 文本以及重置学习顺序。内置示例词条均可删除。
 
-Password fields disable suggestions, learning, and speech input.
+密码输入框停用候选、学习和语音。
 
-## Optional speech service
+## 可选语音服务
 
-Speech is off until you grant microphone permission and enter both a WSS endpoint and an access credential in the app's settings. Both values are encrypted locally with Android Keystore; neither is bundled in the APK. Nine-key uses a long press on `0`, and full QWERTY uses a long press on Space. Hold to record, release to finish, or swipe up to cancel. Recording stops after 30 seconds.
+先授予麦克风权限，再在设置页填写 WSS 地址和访问凭证，语音功能才会启用。两项配置均通过 Android Keystore 在本机加密保存，不会打包进 APK。九键长按 `0`、全键长按空格开始录音；松开发送、上滑取消，单次最多 30 秒。
 
-The client sends a `start` message followed by approximately 100 ms frames of 16 kHz mono PCM16 audio. A compatible service responds with `ready`, revisable `partial` events, `final` events keyed by `segment_id`, and `done` after `end`. The client uses a Bearer authorization header. Recognition text becomes a candidate only after `done`. The client does not persist audio or recognized text; the retention policy of any service you configure is outside this app's control. Network or authentication failures leave existing keyboard input intact.
+客户端先发送 `start`，随后以约 100 毫秒一帧上传 16 kHz、单声道 PCM16 音频。兼容服务应返回 `ready`、可修订的 `partial`、按 `segment_id` 标识的 `final`，并在 `end` 后返回 `done`。客户端通过 Bearer 请求头鉴权，收到 `done` 后才生成可选候选。客户端不持久化音频或识别原文；用户自行配置的服务如何留存内容不由本应用控制。网络或鉴权失败时，原有键盘输入会保留。
 
-## Build and test
+## 构建与测试
 
-Use JDK 17, Android Gradle Plugin 8.13.2, Gradle 8.13, Kotlin 2.2.20, Android SDK 36, NDK 28.0.13004108, and CMake 3.22.1. Set `ANDROID_HOME` or provide a local, untracked `local.properties`.
+工具链：JDK 17、Android Gradle Plugin 8.13.2、Gradle 8.13、Kotlin 2.2.20、Android SDK 36、NDK 28.0.13004108、CMake 3.22.1。设置 `ANDROID_HOME`，或在不提交的 `local.properties` 中指定 SDK 路径。
 
 ```sh
 ./scripts/fetch-native.sh
@@ -38,14 +38,14 @@ Use JDK 17, Android Gradle Plugin 8.13.2, Gradle 8.13, Kotlin 2.2.20, Android SD
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-The native fetch script downloads pinned ARM64 archives outside Git's tracked files. The JNI bridge is original to this project; no Trime client or JNI code is used. Rime's user-frequency learning is disabled so the local SQLite queue controls ordering.
+原生依赖脚本从固定提交获取 ARM64 静态库，产物不纳入 Git。JNI 桥接代码为本项目原创，没有复用 Trime 客户端或 JNI。Rime 自身的用户词频学习已关闭，由本地 SQLite 队列控制候选顺序。
 
-To sign a release build, keep your keystore outside the repository. Set `FK_SIGNING_KEYSTORE`, `FK_SIGNING_ALIAS`, and `FK_SIGNING_PASSWORD` in your local environment or secret manager, then run `./scripts/sign-release.sh`. Do not put signing values in tracked files or shell history. The resulting `release/` APK is ignored by Git.
+发布签名密钥应放在仓库外。在本地环境或密钥管理器中设置 `FK_SIGNING_KEYSTORE`、`FK_SIGNING_ALIAS`、`FK_SIGNING_PASSWORD`，再运行 `./scripts/sign-release.sh`。不要把签名信息写入仓库文件或 shell 历史。生成的 `release/` APK 被 Git 忽略。
 
-## Current validation
+## 当前验证状态
 
-The Android 36 ARM64 emulator has been used to verify installation, keyboard registration, portrait nine-key and landscape QWERTY candidates, password-field behavior, and long-press term insertion. JVM tests cover candidate rules and ordering; device tests cover SQLite persistence and mock-WebSocket speech events. A physical-phone test and real-audio test with a user-configured service are still pending.
+已在 Android 36 ARM64 模拟器验证安装、输入法注册、竖屏九键和横屏全键候选、密码框行为以及长按入库。JVM 测试覆盖候选规则和排序；设备测试覆盖 SQLite 持久化和模拟 WebSocket 语音事件。实体手机及用户自配服务的真实音频端到端测试仍待完成。
 
-## Licenses
+## 许可
 
-See [third-party notices](THIRD_PARTY.md) and the license texts packaged under `app/src/main/assets/licenses/`. No license has yet been granted for the original FK Input application code; public repository visibility alone does not grant reuse rights.
+第三方归属与许可见 [THIRD_PARTY.md](THIRD_PARTY.md)，许可正文也随 APK 放在 `app/src/main/assets/licenses/`。FK 输入法原创应用代码目前尚未授予明确许可；仓库公开不等于自动授权复用。
