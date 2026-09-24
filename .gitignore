@@ -1,0 +1,13 @@
+.gradle/
+**/build/
+**/.cxx/
+local.properties
+*.apk
+*.idsig
+*.aab
+*.jks
+*.keystore
+.idea/
+*.iml
+.DS_Store
+app/src/main/cpp/prebuilt/
