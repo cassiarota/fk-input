@@ -8,7 +8,7 @@ import uk.cassiangroup.fkinput.core.WordCandidate
 import uk.cassiangroup.fkinput.core.moveOneStep
 
 /** Stores only user-maintained terms and candidate order; typed text is never recorded. */
-class InputStore(context: Context) : SQLiteOpenHelper(context, "fk-input.db", null, 1) {
+class InputStore(context: Context) : SQLiteOpenHelper(context, "fk-input.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE terms (term TEXT PRIMARY KEY NOT NULL)")
         db.execSQL(
@@ -17,13 +17,53 @@ class InputStore(context: Context) : SQLiteOpenHelper(context, "fk-input.db", nu
                 "PRIMARY KEY (pinyin, word))"
         )
         db.execSQL("CREATE INDEX ranks_order ON ranks (pinyin, position)")
+        createSensitiveWordsTable(db)
         listOf("和谐", "屏蔽", "敏感词").forEach { term ->
             db.execSQL("INSERT INTO terms (term) VALUES (?)", arrayOf(term))
         }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        error("No migration from $oldVersion to $newVersion")
+        if (oldVersion == 1 && newVersion == 2) {
+            createSensitiveWordsTable(db)
+        } else error("No migration from $oldVersion to $newVersion")
+    }
+
+    private fun createSensitiveWordsTable(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE sensitive_words (word TEXT PRIMARY KEY NOT NULL)")
+    }
+
+    fun sensitiveWords(query: String = ""): List<String> {
+        val result = ArrayList<String>()
+        readableDatabase.rawQuery(
+            "SELECT word FROM sensitive_words WHERE word LIKE ? ESCAPE '\\' ORDER BY word",
+            arrayOf("%${escapeLike(query)}%")
+        ).use { cursor -> while (cursor.moveToNext()) result.add(cursor.getString(0)) }
+        return result
+    }
+
+    fun addSensitiveWord(value: String): Boolean {
+        val word = selectedSensitiveWord(value)
+        return writableDatabase.insertWithOnConflict(
+            "sensitive_words", null, ContentValues().apply { put("word", word) },
+            SQLiteDatabase.CONFLICT_IGNORE
+        ) != -1L
+    }
+
+    /** Idempotent import of the existing private file, including words added by older APKs. */
+    fun importSensitiveWords(text: String): Int {
+        var added = 0
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            text.lineSequence().forEach { line ->
+                if (line.isNotBlank() && addSensitiveWord(line)) added++
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return added
     }
 
     fun terms(query: String = ""): List<String> {

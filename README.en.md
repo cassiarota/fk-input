@@ -6,10 +6,11 @@ FK Input is an experimental Android keyboard focused on optional homophone sugge
 
 ## Features
 
-- Nine-key and full QWERTY Pinyin layouts, direct English input, numbers, and punctuation. Portrait and landscape remember their layout choices separately.
+- Nine-key and full QWERTY Pinyin layouts, direct English input, numbers, and punctuation. Portrait and landscape remember their layout choices separately. Phone, numeric, email, and URL fields switch to dedicated keys.
 - Two independently scrollable Chinese candidate rows: homophone rewrites above, ordinary Pinyin candidates below. Up to five candidates are initially visible in each row.
 - A local, editable homophone-rewrite term list. A complete matching term is rewritten character by character; long-pressing an ordinary candidate adds the whole term without submitting it.
-- A separate local sensitive-word file seeded with 2,482 entries. In chat apps that expose Android's standard text-selection menu, long-press a message, select text, and choose “加入敏感词库” to save it. This file does not yet affect candidates or filter messages.
+- A local sensitive-word library seeded with 2,482 entries. Bundled and user-added words share one SQLite table and remain synchronized with the private UTF-8 file. In chat apps that expose Android's standard text-selection menu, long-press a message, select text, and choose “加入敏感词库” to save it. This library does not yet affect candidates or filter messages.
+- The editing bar moves the cursor and selects editor text; holding Backspace deletes continuously. In a long Pinyin phrase, “短词/长词” changes the candidate span. Selected segments can be tapped to reopen and revise them before committing the whole phrase.
 - A local Pinyin preference queue shared by the two layouts. Choosing an ordinary candidate moves it forward by exactly one position; homophone and speech selections do not train the queue.
 - Optional push-to-talk recognition through a user-configured, compatible WSS service. The keyboard has no built-in service address or credential.
 

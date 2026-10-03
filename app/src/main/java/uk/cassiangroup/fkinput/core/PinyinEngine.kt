@@ -90,6 +90,19 @@ class PinyinEngine(context: Context) {
             .take(12)
     }
 
+    /** Dictionary-backed boundaries for selecting a leading word in a longer composition. */
+    fun segmentLengths(rawInput: String, layout: KeyboardLayout): List<Int> {
+        val index = if (layout == KeyboardLayout.NINE_KEY) nine else roman
+        return (1 until rawInput.length).filter { index.containsKey(rawInput.substring(0, it)) } + rawInput.length
+    }
+
+    fun exactGroups(rawInput: String, layout: KeyboardLayout): List<PinyinGroup> =
+        groups(rawInput, layout).filter { group ->
+            val spelling = group.pinyin.replace(" ", "").replace("'", "")
+            val keys = if (layout == KeyboardLayout.NINE_KEY) toNineKey(spelling) else spelling
+            keys == rawInput
+        }
+
     fun close() = native?.close()
 
     private fun compose(

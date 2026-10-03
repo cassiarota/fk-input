@@ -36,14 +36,19 @@ class SensitiveWordFile(private val file: File, private val bundled: () -> Input
     }
 
     /** Add one selected word or phrase without rewriting an existing entry. */
-    fun add(selection: String): Boolean = synchronized(lock) {
-        val word = selectedSensitiveWord(selection)
+    fun add(selection: String): Boolean = merge(listOf(selection)) > 0
+
+    /** Reconcile words already stored in SQLite with a single atomic file write. */
+    fun merge(selections: Collection<String>): Int = synchronized(lock) {
+        val words = selections.map(::selectedSensitiveWord).distinct()
         initialize()
         val content = file.readText(Charsets.UTF_8)
-        if (content.lineSequence().any { it == word }) return@synchronized false
+        val existing = content.lineSequence().toHashSet()
+        val missing = words.filterNot(existing::contains)
+        if (missing.isEmpty()) return@synchronized 0
         val separator = if (content.isNotEmpty() && !content.endsWith('\n')) "\n" else ""
-        writeAtomically("$content$separator$word\n".toByteArray(Charsets.UTF_8))
-        true
+        writeAtomically("$content$separator${missing.joinToString("\n")}\n".toByteArray(Charsets.UTF_8))
+        missing.size
     }
 
     private fun writeAtomically(bytes: ByteArray) {

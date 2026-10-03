@@ -11,6 +11,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import uk.cassiangroup.fkinput.data.SensitiveWordFile
+import uk.cassiangroup.fkinput.data.InputStore
 
 @RunWith(AndroidJUnit4::class)
 class AddSensitiveWordActivityTest {
@@ -38,6 +39,10 @@ class AddSensitiveWordActivityTest {
             assertEquals(2_483, entries.size)
             assertEquals(1, entries.count { it == selection })
             assertTrue(entries.contains(bundledFirst))
+            InputStore(context).use { store ->
+                assertEquals(1, store.sensitiveWords().count { it == selection })
+                assertTrue(store.sensitiveWords().contains(bundledFirst))
+            }
         } finally {
             file.delete()
         }

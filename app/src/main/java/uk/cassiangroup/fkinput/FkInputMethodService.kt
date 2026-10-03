@@ -12,9 +12,11 @@ import android.os.Looper
 import android.text.InputType
 import android.text.TextUtils
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputMethodManager
 import android.inputmethodservice.InputMethodService
 import android.widget.HorizontalScrollView
@@ -22,14 +24,18 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import uk.cassiangroup.fkinput.core.CandidateRules
+import uk.cassiangroup.fkinput.core.CompositionState
+import uk.cassiangroup.fkinput.core.EditorFieldKind
 import uk.cassiangroup.fkinput.core.KeyboardLayout
 import uk.cassiangroup.fkinput.core.PinyinEngine
 import uk.cassiangroup.fkinput.core.PinyinGroup
 import uk.cassiangroup.fkinput.core.WordCandidate
+import uk.cassiangroup.fkinput.core.editorFieldKind
+import uk.cassiangroup.fkinput.core.isSecureField
 import uk.cassiangroup.fkinput.core.sensitivePositions
 import uk.cassiangroup.fkinput.data.InputPreferences
 import uk.cassiangroup.fkinput.data.InputStore
-import uk.cassiangroup.fkinput.data.SensitiveWordFile
+import uk.cassiangroup.fkinput.data.SensitiveWordRepository
 import uk.cassiangroup.fkinput.voice.StreamingAsr
 import java.util.concurrent.Executors
 
@@ -44,13 +50,19 @@ class FkInputMethodService : InputMethodService() {
     private var chinese = true
     private var shift = false
     private var secureField = false
+    private var fieldKind = EditorFieldKind.TEXT
+    private var numberInputType = 0
     private var panel = Panel.LETTERS
-    private var rawInput = ""
+    private val composition = CompositionState()
     private var speechResult: String? = null
     private var selectedPinyin: String? = null
     private var groups: List<PinyinGroup> = emptyList()
     private var normal: List<WordCandidate> = emptyList()
     private var homophones: List<String> = emptyList()
+    private var segmentLengths: List<Int> = emptyList()
+    private var selectionAnchor: Int? = null
+    private var selectionExtent: Int? = null
+    private var repeatDelete: Runnable? = null
     private var generation = 0
     private var candidateReadyGeneration = 0
     private var sensitiveFirst = false
@@ -62,6 +74,7 @@ class FkInputMethodService : InputMethodService() {
     private lateinit var groupStrip: LinearLayout
     private lateinit var topCandidates: LinearLayout
     private lateinit var normalCandidates: LinearLayout
+    private lateinit var editingRow: LinearLayout
     private lateinit var keyboard: LinearLayout
 
     override fun onCreate() {
@@ -70,7 +83,7 @@ class FkInputMethodService : InputMethodService() {
         preferences = InputPreferences(this)
         layout = preferences.layout(isLandscape())
         worker.execute {
-            runCatching { SensitiveWordFile(this).initialize() }
+            runCatching { SensitiveWordRepository(this, store).initialize() }
                 .onFailure { main.post { notice("本地敏感词库初始化失败") } }
             runCatching {
                 val loadedEngine = PinyinEngine(this)
@@ -107,6 +120,8 @@ class FkInputMethodService : InputMethodService() {
         root.addView(scroll(topCandidates, dp(44)))
         normalCandidates = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(scroll(normalCandidates, dp(44)))
+        editingRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        root.addView(editingRow)
         keyboard = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(keyboard)
         renderKeyboard()
@@ -116,17 +131,25 @@ class FkInputMethodService : InputMethodService() {
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
-        secureField = attribute?.inputType?.let(::isPasswordField) ?: false
-        chinese = !secureField
+        val inputType = attribute?.inputType ?: InputType.TYPE_CLASS_TEXT
+        secureField = isSecureField(inputType)
+        fieldKind = editorFieldKind(inputType)
+        numberInputType = inputType
+        chinese = !secureField && fieldKind == EditorFieldKind.TEXT
         shift = false
         panel = Panel.LETTERS
+        selectionAnchor = null
+        selectionExtent = null
         resetComposition()
-        layout = preferences.layout(isLandscape())
+        layout = if (fieldKind == EditorFieldKind.TEXT) preferences.layout(isLandscape()) else KeyboardLayout.FULL_KEY
         if (::root.isInitialized) renderKeyboard()
     }
 
     override fun onFinishInput() {
         super.onFinishInput()
+        stopRepeatDelete()
+        selectionAnchor = null
+        selectionExtent = null
         speech?.cancel()
         speech = null
         resetComposition()
@@ -141,6 +164,7 @@ class FkInputMethodService : InputMethodService() {
     override fun onEvaluateFullscreenMode(): Boolean = false
 
     override fun onDestroy() {
+        stopRepeatDelete()
         speech?.cancel()
         worker.shutdownNow()
         engine?.close()
@@ -157,16 +181,24 @@ class FkInputMethodService : InputMethodService() {
         resizeStrip(topCandidates, if (compact) 30 else 44)
         resizeStrip(normalCandidates, if (compact) 30 else 44)
         toolbar.removeAllViews()
-        toolbar.addView(key(if (secureField || layout == KeyboardLayout.FULL_KEY) "全键" else "九键", 1f) {
-            if (secureField) return@key
-            if (rawInput.isNotEmpty() && !commitDefault()) return@key
+        toolbar.addView(key(when (fieldKind) {
+            EditorFieldKind.PHONE -> "电话"
+            EditorFieldKind.NUMBER -> "数字"
+            EditorFieldKind.EMAIL -> "邮箱"
+            EditorFieldKind.URL -> "网址"
+            EditorFieldKind.TEXT -> if (secureField || layout == KeyboardLayout.FULL_KEY) "全键" else "九键"
+        }, 1f) {
+            if (secureField || fieldKind != EditorFieldKind.TEXT) return@key
+            if (composition.hasContent && !commitDefault()) return@key
             layout = if (layout == KeyboardLayout.NINE_KEY) KeyboardLayout.FULL_KEY else KeyboardLayout.NINE_KEY
             preferences.setLayout(isLandscape(), layout)
             renderKeyboard()
         })
-        toolbar.addView(key(if (chinese) "中" else "英", 1f) { toggleLanguage() })
-        toolbar.addView(key("123", 1f) { panel = Panel.NUMBERS; renderKeyboard() })
-        toolbar.addView(key("符", 1f) { panel = Panel.SYMBOLS; renderKeyboard() })
+        if (fieldKind == EditorFieldKind.TEXT || fieldKind == EditorFieldKind.EMAIL || fieldKind == EditorFieldKind.URL) {
+            toolbar.addView(key(if (chinese) "中" else "英", 1f) { toggleLanguage() })
+            toolbar.addView(key("123", 1f) { panel = Panel.NUMBERS; renderKeyboard() })
+            toolbar.addView(key("符", 1f) { panel = Panel.SYMBOLS; renderKeyboard() })
+        }
         toolbar.addView(key("⚙", 1f) {
             startActivity(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         })
@@ -175,13 +207,15 @@ class FkInputMethodService : InputMethodService() {
         })
 
         keyboard.removeAllViews()
-        when (panel) {
-            Panel.NUMBERS -> renderNumbers()
-            Panel.SYMBOLS -> renderSymbols()
-            Panel.LETTERS -> if (layout == KeyboardLayout.NINE_KEY && chinese && !secureField) {
-                renderNineKey()
-            } else renderFullKey()
+        when {
+            fieldKind == EditorFieldKind.PHONE -> renderPhoneKey()
+            fieldKind == EditorFieldKind.NUMBER -> renderFieldNumberKey()
+            panel == Panel.NUMBERS -> renderNumbers()
+            panel == Panel.SYMBOLS -> renderSymbols()
+            layout == KeyboardLayout.NINE_KEY && chinese && !secureField -> renderNineKey()
+            else -> renderFullKey()
         }
+        renderEditingRow()
         updateCandidateVisibility()
     }
 
@@ -198,25 +232,189 @@ class FkInputMethodService : InputMethodService() {
         addRow("qwertyuiop".map { if (upper) it.uppercase() else it.toString() }, List(10) { 1f })
         addRow("asdfghjkl".map { if (upper) it.uppercase() else it.toString() }, List(9) { 1f })
         addRow(listOf("⇧") + "zxcvbnm".map { if (upper) it.uppercase() else it.toString() } + "⌫", List(9) { 1f })
-        addRow(
-            listOf("123", "符", if (chinese) "，" else ",",
-                if (secureField) "空格" else "空格 · 语音", if (chinese) "。" else ".", "↵", "中/英"),
-            listOf(1f, 1f, 1f, 4f, 1f, 1.2f, 1.2f)
-        )
+        when (fieldKind) {
+            EditorFieldKind.EMAIL -> addRow(listOf("123", "符", "@", ".", "_", "-", "↵"),
+                listOf(1f, 1f, 1.4f, 1f, 1f, 1f, 1.2f))
+            EditorFieldKind.URL -> addRow(listOf("123", "符", "/", ":", ".", "-", "↵"),
+                listOf(1f, 1f, 1.4f, 1f, 1f, 1f, 1.2f))
+            else -> addRow(
+                listOf("123", "符", if (chinese) "，" else ",",
+                    if (secureField) "空格" else "空格 · 语音", if (chinese) "。" else ".", "↵", "中/英"),
+                listOf(1f, 1f, 1f, 4f, 1f, 1.2f, 1.2f)
+            )
+        }
+    }
+
+    private fun renderPhoneKey() {
+        addRow(listOf("1", "2", "3"), List(3) { 1f })
+        addRow(listOf("4", "5", "6"), List(3) { 1f })
+        addRow(listOf("7", "8", "9"), List(3) { 1f })
+        addRow(listOf("+", "0", "⌫"), List(3) { 1f })
+        addRow(listOf("*", "#", "-", "↵"), List(4) { 1f })
+    }
+
+    private fun renderFieldNumberKey() {
+        addRow(listOf("1", "2", "3"), List(3) { 1f })
+        addRow(listOf("4", "5", "6"), List(3) { 1f })
+        addRow(listOf("7", "8", "9"), List(3) { 1f })
+        val controls = ArrayList<String>()
+        if (numberInputType and InputType.TYPE_NUMBER_FLAG_SIGNED != 0) controls.add("-")
+        controls.add("0")
+        if (numberInputType and InputType.TYPE_NUMBER_FLAG_DECIMAL != 0) controls.add(".")
+        if (numberInputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_DATETIME) {
+            controls.add("/")
+            controls.add(":")
+        }
+        controls.add("⌫")
+        controls.add("↵")
+        addRow(controls, List(controls.size) { 1f })
+    }
+
+    private fun renderEditingRow() {
+        if (!::editingRow.isInitialized) return
+        editingRow.removeAllViews()
+        fun add(label: String, weight: Float = 1f, action: () -> Unit): TextView {
+            val view = key(label, weight, action)
+            view.textSize = 14f
+            view.layoutParams = LinearLayout.LayoutParams(0, dp(34), weight).apply {
+                setMargins(dp(2), dp(1), dp(2), dp(1))
+            }
+            editingRow.addView(view)
+            return view
+        }
+        add("◀") { moveCursor(-1) }
+        add("▶") { moveCursor(1) }
+        add(if (selectionAnchor == null) "选择" else "取消选择", 1.5f) { toggleSelection() }
+        val canSplit = chinese && composition.raw.length > 1 && segmentLengths.size > 1
+        add("短词") { adjustSegment(-1) }.visibility = if (canSplit) View.VISIBLE else View.GONE
+        add("长词") { adjustSegment(1) }.visibility = if (canSplit) View.VISIBLE else View.GONE
+    }
+
+    private fun compositionDisplay(): String {
+        val selected = composition.selectedText
+        val raw = composition.raw
+        if (raw.isEmpty()) return selected
+        val cursor = composition.cursor
+        val cursorMarked = raw.substring(0, cursor) + "│" + raw.substring(cursor)
+        return if (composition.pendingSuffix.isEmpty()) selected + cursorMarked
+        else "$selected[${composition.candidateInput}]${composition.pendingSuffix}  ·  局部选词"
+    }
+
+    private fun adjustSegment(direction: Int) {
+        if (segmentLengths.isEmpty() || composition.raw.isEmpty()) return
+        val current = composition.segmentEnd
+        val next = if (direction < 0) segmentLengths.lastOrNull { it < current }
+            else segmentLengths.firstOrNull { it > current }
+        if (next == null) return
+        composition.setSegmentEnd(next)
+        selectedPinyin = null
+        updateCandidates()
+    }
+
+    private fun toggleSelection() {
+        val connection = currentInputConnection ?: return
+        if (composition.hasContent) {
+            notice("请先完成拼音输入，再选中编辑框文字")
+            return
+        }
+        val anchor = selectionAnchor
+        if (anchor != null) {
+            selectionAnchor = null
+            val end = selectionExtent ?: anchor
+            selectionExtent = null
+            connection.setSelection(end, end)
+        } else {
+            val extracted = connection.getExtractedText(ExtractedTextRequest(), 0)
+            if (extracted == null) {
+                notice("当前应用不支持键盘内选中")
+                return
+            }
+            selectionAnchor = extracted.selectionEnd
+            selectionExtent = extracted.selectionEnd
+        }
+        renderEditingRow()
+    }
+
+    private fun moveCursor(direction: Int) {
+        if (composition.hasContent) {
+            if (composition.raw.isEmpty()) {
+                composition.reopen(composition.selectedParts.lastIndex)
+                selectedPinyin = null
+                updateCandidates()
+            }
+            composition.moveCursor(direction)
+            composing.text = compositionDisplay()
+            return
+        }
+        val connection = currentInputConnection ?: return
+        val extracted = connection.getExtractedText(ExtractedTextRequest(), 0)
+        if (extracted == null) {
+            val code = if (direction < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+            connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+            connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+            return
+        }
+        val anchor = selectionAnchor
+        val old = selectionExtent ?: if (direction < 0) extracted.selectionStart else extracted.selectionEnd
+        val next = (old + direction).coerceAtLeast(0)
+        if (anchor != null) {
+            if (connection.setSelection(minOf(anchor, next), maxOf(anchor, next))) {
+                selectionExtent = next
+            }
+        } else connection.setSelection(next, next)
+    }
+
+    private fun repeatDeleteGesture(view: TextView) {
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    stopRepeatDelete()
+                    backspace()
+                    val repeat = object : Runnable {
+                        override fun run() {
+                            backspace()
+                            main.postDelayed(this, 65)
+                        }
+                    }
+                    repeatDelete = repeat
+                    main.postDelayed(repeat, 380)
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    stopRepeatDelete()
+                    true
+                }
+                else -> true
+            }
+        }
+    }
+
+    private fun stopRepeatDelete() {
+        repeatDelete?.let(main::removeCallbacks)
+        repeatDelete = null
     }
 
     private fun renderNumbers() {
         addRow(listOf("1", "2", "3", "⌫"), listOf(1f, 1f, 1f, 1.1f))
         addRow(listOf("4", "5", "6", "-"), List(4) { 1f })
         addRow(listOf("7", "8", "9", "/"), List(4) { 1f })
-        addRow(listOf("返回", "0", ".", "空格", "↵"), listOf(1.5f, 1f, 1f, 2f, 1f))
+        if (fieldKind == EditorFieldKind.EMAIL || fieldKind == EditorFieldKind.URL) {
+            addRow(listOf("返回", "0", ".", "@", "↵"), listOf(1.5f, 1f, 1f, 1f, 1f))
+        } else addRow(listOf("返回", "0", ".", "空格", "↵"), listOf(1.5f, 1f, 1f, 2f, 1f))
     }
 
     private fun renderSymbols() {
-        addRow(listOf("，", "。", "？", "！", "；", "："), List(6) { 1f })
-        addRow(listOf("（", "）", "“", "”", "、", "…"), List(6) { 1f })
+        if (chinese) {
+            addRow(listOf("，", "。", "？", "！", "；", "："), List(6) { 1f })
+            addRow(listOf("（", "）", "“", "”", "、", "…"), List(6) { 1f })
+        } else {
+            addRow(listOf(",", ".", "?", "!", ";", ":"), List(6) { 1f })
+            addRow(listOf("(", ")", "'", "\"", "_", "/"), List(6) { 1f })
+        }
         addRow(listOf("@", "#", "&", "%", "+", "="), List(6) { 1f })
-        addRow(listOf("返回", "⌫", "空格", "↵"), listOf(1.5f, 1f, 3f, 1f))
+        if (fieldKind == EditorFieldKind.EMAIL || fieldKind == EditorFieldKind.URL) {
+            addRow(listOf("返回", "⌫", "-", "↵"), listOf(1.5f, 1f, 3f, 1f))
+        } else addRow(listOf("返回", "⌫", "空格", "↵"), listOf(1.5f, 1f, 3f, 1f))
     }
 
     private fun addRow(labels: List<String>, weights: List<Float>) {
@@ -225,6 +423,8 @@ class FkInputMethodService : InputMethodService() {
             val button = key(label, weights[index]) { handleKey(label) }
             if (label == "0 · 语音" || label == "空格 · 语音") {
                 voiceGesture(button) { handleKey(if (label.startsWith("0")) "0" else "空格") }
+            } else if (label == "⌫") {
+                repeatDeleteGesture(button)
             }
             row.addView(button)
         }
@@ -257,11 +457,11 @@ class FkInputMethodService : InputMethodService() {
             "123" -> { panel = Panel.NUMBERS; renderKeyboard() }
             "符" -> { panel = Panel.SYMBOLS; renderKeyboard() }
             "空格", "空格 · 语音" -> {
-                if ((rawInput.isNotEmpty() || speechResult != null) && !secureField) commitDefault()
+                if ((composition.hasContent || speechResult != null) && !secureField) commitDefault()
                 else commitText(" ")
             }
             "↵" -> {
-                if ((rawInput.isNotEmpty() || speechResult != null) && !commitDefault()) return
+                if ((composition.hasContent || speechResult != null) && !commitDefault()) return
                 val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
                     ?: EditorInfo.IME_ACTION_NONE
                 if (action == EditorInfo.IME_ACTION_NONE ||
@@ -276,10 +476,11 @@ class FkInputMethodService : InputMethodService() {
                         (layout == KeyboardLayout.FULL_KEY && value.length == 1 && value[0] in 'a'..'z'))
                 ) {
                     speechResult = null
-                    rawInput += value
+                    composition.insert(value)
+                    selectedPinyin = null
                     updateCandidates()
                 } else {
-                    if ((rawInput.isNotEmpty() || speechResult != null) && !commitDefault()) return
+                    if ((composition.hasContent || speechResult != null) && !commitDefault()) return
                     commitText(value)
                     if (shift && !chinese && value.length == 1 && value[0].isLetter()) {
                         shift = false
@@ -291,7 +492,8 @@ class FkInputMethodService : InputMethodService() {
     }
 
     private fun toggleLanguage() {
-        if ((rawInput.isNotEmpty() || speechResult != null) && !commitDefault()) return
+        if (fieldKind != EditorFieldKind.TEXT) return
+        if ((composition.hasContent || speechResult != null) && !commitDefault()) return
         chinese = !chinese && !secureField
         shift = false
         panel = Panel.LETTERS
@@ -300,13 +502,22 @@ class FkInputMethodService : InputMethodService() {
     }
 
     private fun backspace() {
-        if (rawInput.isNotEmpty()) {
-            rawInput = rawInput.dropLast(1)
+        if (composition.hasContent) {
+            composition.backspace()
+            selectedPinyin = null
             updateCandidates()
         } else if (speechResult != null) {
             speechResult = null
             updateCandidates()
-        } else currentInputConnection?.deleteSurroundingTextInCodePoints(1, 0)
+        } else {
+            val connection = currentInputConnection ?: return
+            val selected = connection.getSelectedText(0)
+            if (!selected.isNullOrEmpty()) connection.commitText("", 1)
+            else connection.deleteSurroundingTextInCodePoints(1, 0)
+            selectionAnchor = null
+            selectionExtent = null
+            renderEditingRow()
+        }
     }
 
     private fun updateCandidates() {
@@ -316,14 +527,15 @@ class FkInputMethodService : InputMethodService() {
         composing.text = when {
             voicePreview.isNotEmpty() -> "🎙 $voicePreview"
             speechResult != null -> speechResult
-            else -> rawInput
+            else -> compositionDisplay()
         }
         updateCandidateVisibility()
         if (secureField || (!chinese && speechResult == null) ||
-            (rawInput.isEmpty() && speechResult == null)) {
+            (composition.raw.isEmpty() && speechResult == null)) {
             groups = emptyList()
             normal = emptyList()
             homophones = emptyList()
+            segmentLengths = emptyList()
             sensitiveFirst = false
             candidateReadyGeneration = token
             renderCandidates()
@@ -332,6 +544,7 @@ class FkInputMethodService : InputMethodService() {
         groups = emptyList()
         normal = emptyList()
         homophones = emptyList()
+        segmentLengths = emptyList()
         renderCandidates()
         val activeEngine = engine
         val activeRules = rules
@@ -339,7 +552,8 @@ class FkInputMethodService : InputMethodService() {
             composing.text = "词典加载中…"
             return
         }
-        val input = rawInput
+        val input = composition.candidateInput
+        val rawForLengths = composition.raw
         val spoken = speechResult
         val chosen = selectedPinyin
         val currentLayout = layout
@@ -347,7 +561,10 @@ class FkInputMethodService : InputMethodService() {
             val terms = store.terms()
             val foundGroups = if (spoken != null) listOf(
                 PinyinGroup("", listOf(WordCandidate(spoken, "", 0)), 0.0)
-            ) else activeEngine.groups(input, currentLayout)
+            ) else if (input.length < rawForLengths.length) activeEngine.exactGroups(input, currentLayout)
+            else activeEngine.groups(input, currentLayout)
+            val validLengths = if (spoken == null) activeEngine.segmentLengths(rawForLengths, currentLayout)
+                else emptyList()
             val group = foundGroups.firstOrNull { it.pinyin == chosen } ?: foundGroups.firstOrNull()
             val ranked = group?.let {
                 if (spoken == null) store.ordered(it.pinyin, it.candidates) else it.candidates
@@ -362,6 +579,7 @@ class FkInputMethodService : InputMethodService() {
                 selectedPinyin = group?.pinyin
                 normal = ranked
                 homophones = generated
+                segmentLengths = validLengths
                 sensitiveFirst = firstIsSensitive
                 candidateReadyGeneration = token
                 renderCandidates()
@@ -372,6 +590,19 @@ class FkInputMethodService : InputMethodService() {
     private fun renderCandidates() {
         if (!::root.isInitialized) return
         groupStrip.removeAllViews()
+        composition.selectedParts.forEachIndexed { index, part ->
+            groupStrip.addView(TextView(this).apply {
+                text = "${part.text} ↶"
+                textSize = 14f
+                setPadding(dp(8), dp(2), dp(8), dp(2))
+                setTextColor(Color.rgb(37, 84, 180))
+                setOnClickListener {
+                    composition.reopen(index)
+                    selectedPinyin = null
+                    updateCandidates()
+                }
+            })
+        }
         groups.forEach { group ->
             val label = TextView(this).apply {
                 text = group.pinyin
@@ -396,12 +627,13 @@ class FkInputMethodService : InputMethodService() {
             }.apply {
                 setOnLongClickListener {
                     runCatching { store.addTerm(item.text) }
-                        .onSuccess { notice(if (it) "已加入敏感词列表" else "词条已存在"); updateCandidates() }
+                        .onSuccess { notice(if (it) "已加入谐音改写词条" else "词条已存在"); updateCandidates() }
                         .onFailure { notice(it.message ?: "无法加入") }
                     true
                 }
             })
         }
+        renderEditingRow()
         updateCandidateVisibility()
     }
 
@@ -420,21 +652,42 @@ class FkInputMethodService : InputMethodService() {
 
     private fun updateCandidateVisibility() {
         if (!::root.isInitialized) return
-        val show = !secureField && (speechResult != null || (chinese && rawInput.isNotEmpty()))
-        groupStrip.parent?.let { (it as View).visibility = if (show && speechResult == null) View.VISIBLE else View.GONE }
-        topCandidates.parent?.let { (it as View).visibility = if (show) View.VISIBLE else View.GONE }
-        normalCandidates.parent?.let { (it as View).visibility = if (show) View.VISIBLE else View.GONE }
+        val show = !secureField && (speechResult != null || (chinese && composition.raw.isNotEmpty()))
+        val showParts = !secureField && chinese && composition.selectedParts.isNotEmpty()
+        val hidden = if (chinese && fieldKind == EditorFieldKind.TEXT && !secureField) View.INVISIBLE else View.GONE
+        groupStrip.parent?.let { (it as View).visibility = if ((show || showParts) && speechResult == null) View.VISIBLE else hidden }
+        topCandidates.parent?.let { (it as View).visibility = if (show) View.VISIBLE else hidden }
+        normalCandidates.parent?.let { (it as View).visibility = if (show) View.VISIBLE else hidden }
     }
 
     private fun commitCandidate(text: String, ordinary: Boolean) {
-        if (ordinary && speechResult == null && rawInput.isNotEmpty() && selectedPinyin != null) {
+        if (ordinary && speechResult == null && composition.raw.isNotEmpty() && selectedPinyin != null) {
             store.promote(selectedPinyin!!, text, normal)
         }
-        commitText(text)
-        resetComposition()
+        if (speechResult != null) {
+            commitText(text)
+            resetComposition()
+        } else {
+            val finished = composition.choose(text)
+            selectedPinyin = null
+            if (finished == null) updateCandidates()
+            else {
+                commitText(finished)
+                resetComposition()
+            }
+        }
     }
 
     private fun commitDefault(): Boolean {
+        if (composition.raw.isEmpty() && composition.selectedParts.isNotEmpty()) {
+            commitText(composition.takeSelectedOnly())
+            resetComposition()
+            return true
+        }
+        if (composition.pendingSuffix.isNotEmpty()) {
+            notice("请先选择当前局部候选，或点“长词”返回全句")
+            return false
+        }
         if (candidateReadyGeneration != generation) {
             notice("候选生成中，请稍候")
             return false
@@ -445,15 +698,15 @@ class FkInputMethodService : InputMethodService() {
             return false
         }
         if (word != null) commitCandidate(word, false)
-        else if (rawInput.isNotEmpty()) {
-            commitText(rawInput)
+        else if (composition.raw.isNotEmpty()) {
+            commitText(composition.selectedText + composition.raw)
             resetComposition()
         }
         return true
     }
 
     private fun resetComposition() {
-        rawInput = ""
+        composition.clear()
         speechResult = null
         selectedPinyin = null
         voicePreview = ""
@@ -462,6 +715,11 @@ class FkInputMethodService : InputMethodService() {
 
     private fun commitText(text: String) {
         currentInputConnection?.commitText(text, 1)
+        if (selectionAnchor != null) {
+            selectionAnchor = null
+            selectionExtent = null
+            renderEditingRow()
+        }
     }
 
     private fun voiceGesture(view: TextView, shortPress: () -> Unit) {
@@ -547,7 +805,7 @@ class FkInputMethodService : InputMethodService() {
                     notice("没有识别到文字")
                     updateCandidates()
                 } else {
-                    rawInput = ""
+                    composition.clear()
                     speechResult = text
                     selectedPinyin = null
                     updateCandidates()
@@ -579,14 +837,6 @@ class FkInputMethodService : InputMethodService() {
 
     private fun isLandscape() =
         resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-    private fun isPasswordField(inputType: Int): Boolean {
-        val variation = inputType and InputType.TYPE_MASK_VARIATION
-        return variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
-            variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
-            variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
-            variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
-    }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun notice(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()

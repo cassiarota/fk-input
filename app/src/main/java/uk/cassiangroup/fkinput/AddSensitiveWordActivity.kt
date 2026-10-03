@@ -5,7 +5,8 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
-import uk.cassiangroup.fkinput.data.SensitiveWordFile
+import uk.cassiangroup.fkinput.data.InputStore
+import uk.cassiangroup.fkinput.data.SensitiveWordRepository
 import uk.cassiangroup.fkinput.data.selectedSensitiveWord
 
 /** Adds text selected in another app through Android's standard selection menu. */
@@ -25,7 +26,9 @@ class AddSensitiveWordActivity : Activity() {
             .setMessage(selection)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(R.string.add_sensitive_word) { _, _ ->
-                runCatching { SensitiveWordFile(this).add(selection) }
+                runCatching {
+                    InputStore(this).use { store -> SensitiveWordRepository(this, store).add(selection) }
+                }
                     .onSuccess { notice(getString(if (it) R.string.sensitive_word_added else R.string.sensitive_word_exists)) }
                     .onFailure { notice(it.message ?: getString(R.string.sensitive_word_failed)) }
             }
