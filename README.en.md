@@ -7,6 +7,7 @@ FK Input is an experimental Android keyboard focused on optional homophone sugge
 ## Features
 
 - Nine-key and full QWERTY Pinyin layouts, direct English input, numbers, and punctuation. Portrait and landscape remember their layout choices separately. Phone, numeric, email, and URL fields switch to dedicated keys.
+- Tap “切换” in the keyboard toolbar to return to the previous keyboard, or hold it to open the system keyboard picker. A tap also opens the picker when no previous keyboard is available.
 - Two independently scrollable Chinese candidate rows: homophone rewrites above, ordinary Pinyin candidates below. Up to five candidates are initially visible in each row.
 - A local, editable homophone-rewrite term list. A complete matching term is rewritten character by character; long-pressing an ordinary candidate adds the whole term without submitting it.
 - A local sensitive-word library seeded with 2,482 entries. Bundled and user-added words share one SQLite table and remain synchronized with the private UTF-8 file. In chat apps that expose Android's standard text-selection menu, long-press a message, select text, and choose “加入敏感词库” to save it. This library does not yet affect candidates or filter messages.
@@ -18,7 +19,11 @@ FK Input is an experimental Android keyboard focused on optional homophone sugge
 
 The project targets Android 10+ (`minSdk 29`) and currently builds an ARM64 APK. Download a signed APK from [GitHub Releases](https://github.com/cassiarota/fk-input/releases), or follow [Build and test](#build-and-test) to build a debug APK and install `app/build/outputs/apk/debug/app-debug.apk`. No APK or signing material is committed to Git.
 
-Open FK Input, enable it in Android's input-method settings, and select it as the current keyboard. Android shows its standard warning when enabling any third-party keyboard. Portrait defaults to nine-key; landscape defaults to full QWERTY. Use the keyboard toolbar to change either layout.
+Open FK Input and enable it in Android's input-method settings. Android shows its standard warning when enabling any third-party keyboard. Enabling FK does not replace the current keyboard, so you can keep using your usual keyboard.
+
+When you need FK in a game or another app, select it through the system keyboard switcher or tap “选择 / 切换输入法” in FK's settings. When finished, tap “切换” in FK's toolbar to return directly to the previous keyboard. Hold the key to choose another enabled keyboard; a tap also opens the picker if no previous keyboard is available. Pending input is committed using the existing candidate rules before switching; finish choosing a candidate first if manual selection is required. Android's keyboard selection applies to all apps. FK does not switch automatically when entering or leaving a game.
+
+Portrait defaults to nine-key; landscape defaults to full QWERTY. Use the keyboard toolbar to change either layout.
 
 In Chinese mode, Space, punctuation, and Enter submit the first homophone candidate before the following character/action. If a listed term has no valid homophone, the original term is **not** submitted automatically; choose an ordinary candidate explicitly. Manage terms, UTF-8 import/export, and learning reset in the app's settings. The bundled example terms are removable.
 
@@ -50,7 +55,7 @@ GitHub Actions signs with the encrypted repository secrets `FK_SIGNING_KEYSTORE_
 
 ## Current validation
 
-The Android 36 ARM64 emulator has been used to verify installation, keyboard registration, portrait nine-key and landscape QWERTY candidates, password-field behavior, and long-press candidate insertion. JVM tests cover candidate rules, ordering, and the sensitive-word file; device tests cover SQLite persistence, mock-WebSocket speech events, and confirmation, writing, and deduplication through the system text-selection action. Whether a chat app displays this system action depends on its selection UI and has not been checked app by app. A physical-phone test and real-audio test with a user-configured service are still pending.
+The Android 36 ARM64 emulator has been used to verify installation, keyboard registration, portrait nine-key and landscape QWERTY candidates, password-field behavior, and long-press candidate insertion. Quick switching has been checked for keeping the current keyboard when enabling FK, returning to the previous keyboard on tap, opening the picker on hold or when no previous keyboard is available, committing a completed candidate before switching, and preserving unfinished local candidate input. JVM tests cover candidate rules, ordering, and the sensitive-word file; device tests cover SQLite persistence, mock-WebSocket speech events, and confirmation, writing, and deduplication through the system text-selection action. Whether a chat app displays this system action depends on its selection UI and has not been checked app by app. A physical-phone test and real-audio test with a user-configured service are still pending.
 
 ## Licenses
 

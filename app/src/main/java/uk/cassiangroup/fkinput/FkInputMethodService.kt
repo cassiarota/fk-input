@@ -202,8 +202,13 @@ class FkInputMethodService : InputMethodService() {
         toolbar.addView(key("⚙", 1f) {
             startActivity(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         })
-        toolbar.addView(key("切换", 1f) {
-            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
+        toolbar.addView(key("切换", 1f) { switchInputMethod(showPicker = false) }.apply {
+            contentDescription = "切回上一个输入法，长按选择输入法"
+            tooltipText = "点按切回上一个输入法；长按打开输入法列表"
+            setOnLongClickListener {
+                switchInputMethod(showPicker = true)
+                true
+            }
         })
 
         keyboard.removeAllViews()
@@ -217,6 +222,13 @@ class FkInputMethodService : InputMethodService() {
         }
         renderEditingRow()
         updateCandidateVisibility()
+    }
+
+    private fun switchInputMethod(showPicker: Boolean) {
+        if ((composition.hasContent || speechResult != null) && !commitDefault()) return
+        if (showPicker || !switchToPreviousInputMethod()) {
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
+        }
     }
 
     private fun renderNineKey() {

@@ -53,7 +53,8 @@ class SettingsActivity : Activity() {
         root.addView(action("1. 在系统设置启用输入法") {
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
         })
-        root.addView(action("2. 选择 FK 输入法") {
+        root.addView(info("启用后可以继续用原来的输入法。需要 FK 时，再通过系统键盘切换入口或下面的按钮选择它。键盘顶部“切换”键点按切回上一个输入法，长按打开输入法列表。Android 的选择对所有应用生效，退出游戏后请切回日常输入法。"))
+        root.addView(action("2. 选择 / 切换输入法") {
             (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
         })
         root.addView(action("授予麦克风权限") {
