@@ -3,8 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val fkVersion = providers.gradleProperty("fkVersion").orNull ?: "0.1.3"
-val fkVersionCode = providers.gradleProperty("fkVersionCode").orNull?.toInt() ?: 1003
+val fkVersion = providers.gradleProperty("fkVersion").orNull ?: "0.1.4"
+val fkVersionCode = providers.gradleProperty("fkVersionCode").orNull?.toInt() ?: 1004
 require(fkVersion.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+")))
 require(fkVersionCode in 1..2_100_000_000)
 

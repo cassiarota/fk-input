@@ -1,7 +1,7 @@
 schema:
   schema_id: fk_pinyin
   name: FK 全拼
-  version: '1.0'
+  version: '2.0'
 
 engine:
   processors:

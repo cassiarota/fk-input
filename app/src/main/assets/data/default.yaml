@@ -1,5 +1,4 @@
 # FK Input Rime schema selection.
-config_version: '1.0'
+config_version: '2.0'
 schema_list:
   - schema: fk_pinyin
-  - schema: fk_nine

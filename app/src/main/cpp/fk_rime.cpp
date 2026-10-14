@@ -52,7 +52,7 @@ Java_uk_cassiangroup_fkinput_core_NativeRime_nativeInit(
 
 extern "C" JNIEXPORT jobjectArray JNICALL
 Java_uk_cassiangroup_fkinput_core_NativeRime_nativeCandidates(
-    JNIEnv* env, jobject, jstring input, jboolean nine_key) {
+    JNIEnv* env, jobject, jstring input) {
   std::lock_guard<std::mutex> lock(engine_mutex);
   jclass string_class = env->FindClass("java/lang/String");
   if (!initialized || !api || !string_class) {
@@ -61,7 +61,7 @@ Java_uk_cassiangroup_fkinput_core_NativeRime_nativeCandidates(
   const std::string keys = utf8(env, input);
   const RimeSessionId session = api->create_session();
   if (!session) return env->NewObjectArray(0, string_class, nullptr);
-  api->select_schema(session, nine_key ? "fk_nine" : "fk_pinyin");
+  api->select_schema(session, "fk_pinyin");
   for (unsigned char key : keys) api->process_key(session, key, 0);
 
   std::vector<std::string> words;

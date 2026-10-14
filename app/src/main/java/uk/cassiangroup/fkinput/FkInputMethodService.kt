@@ -26,7 +26,6 @@ import android.widget.Toast
 import uk.cassiangroup.fkinput.core.CandidateRules
 import uk.cassiangroup.fkinput.core.CompositionState
 import uk.cassiangroup.fkinput.core.EditorFieldKind
-import uk.cassiangroup.fkinput.core.KeyboardLayout
 import uk.cassiangroup.fkinput.core.PinyinEngine
 import uk.cassiangroup.fkinput.core.PinyinGroup
 import uk.cassiangroup.fkinput.core.WordCandidate
@@ -46,7 +45,6 @@ class FkInputMethodService : InputMethodService() {
     private lateinit var preferences: InputPreferences
     private var engine: PinyinEngine? = null
     private var rules: CandidateRules? = null
-    private var layout = KeyboardLayout.NINE_KEY
     private var chinese = true
     private var shift = false
     private var secureField = false
@@ -58,7 +56,7 @@ class FkInputMethodService : InputMethodService() {
     private var selectedPinyin: String? = null
     private var groups: List<PinyinGroup> = emptyList()
     private var normal: List<WordCandidate> = emptyList()
-    private var homophones: List<String> = emptyList()
+    private var homophones: List<String?> = emptyList()
     private var segmentLengths: List<Int> = emptyList()
     private var selectionAnchor: Int? = null
     private var selectionExtent: Int? = null
@@ -81,7 +79,6 @@ class FkInputMethodService : InputMethodService() {
         super.onCreate()
         store = InputStore(this)
         preferences = InputPreferences(this)
-        layout = preferences.layout(isLandscape())
         worker.execute {
             runCatching { SensitiveWordRepository(this, store).initialize() }
                 .onFailure { main.post { notice("本地敏感词库初始化失败") } }
@@ -117,9 +114,17 @@ class FkInputMethodService : InputMethodService() {
         groupStrip = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(scroll(groupStrip, dp(29)))
         topCandidates = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        root.addView(scroll(topCandidates, dp(44)))
+        val topScroll = scroll(topCandidates, dp(44))
+        root.addView(topScroll)
         normalCandidates = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        root.addView(scroll(normalCandidates, dp(44)))
+        val normalScroll = scroll(normalCandidates, dp(44))
+        root.addView(normalScroll)
+        topScroll.setOnScrollChangeListener { _, x, _, _, _ ->
+            if (normalScroll.scrollX != x) normalScroll.scrollTo(x, 0)
+        }
+        normalScroll.setOnScrollChangeListener { _, x, _, _, _ ->
+            if (topScroll.scrollX != x) topScroll.scrollTo(x, 0)
+        }
         editingRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(editingRow)
         keyboard = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -141,7 +146,6 @@ class FkInputMethodService : InputMethodService() {
         selectionAnchor = null
         selectionExtent = null
         resetComposition()
-        layout = if (fieldKind == EditorFieldKind.TEXT) preferences.layout(isLandscape()) else KeyboardLayout.FULL_KEY
         if (::root.isInitialized) renderKeyboard()
     }
 
@@ -157,7 +161,6 @@ class FkInputMethodService : InputMethodService() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        layout = preferences.layout(isLandscape())
         if (::root.isInitialized) renderKeyboard()
     }
 
@@ -186,14 +189,8 @@ class FkInputMethodService : InputMethodService() {
             EditorFieldKind.NUMBER -> "数字"
             EditorFieldKind.EMAIL -> "邮箱"
             EditorFieldKind.URL -> "网址"
-            EditorFieldKind.TEXT -> if (secureField || layout == KeyboardLayout.FULL_KEY) "全键" else "九键"
-        }, 1f) {
-            if (secureField || fieldKind != EditorFieldKind.TEXT) return@key
-            if (composition.hasContent && !commitDefault()) return@key
-            layout = if (layout == KeyboardLayout.NINE_KEY) KeyboardLayout.FULL_KEY else KeyboardLayout.NINE_KEY
-            preferences.setLayout(isLandscape(), layout)
-            renderKeyboard()
-        })
+            EditorFieldKind.TEXT -> "26键"
+        }, 1f) {}.apply { isEnabled = false })
         if (fieldKind == EditorFieldKind.TEXT || fieldKind == EditorFieldKind.EMAIL || fieldKind == EditorFieldKind.URL) {
             toolbar.addView(key(if (chinese) "中" else "英", 1f) { toggleLanguage() })
             toolbar.addView(key("123", 1f) { panel = Panel.NUMBERS; renderKeyboard() })
@@ -217,7 +214,6 @@ class FkInputMethodService : InputMethodService() {
             fieldKind == EditorFieldKind.NUMBER -> renderFieldNumberKey()
             panel == Panel.NUMBERS -> renderNumbers()
             panel == Panel.SYMBOLS -> renderSymbols()
-            layout == KeyboardLayout.NINE_KEY && chinese && !secureField -> renderNineKey()
             else -> renderFullKey()
         }
         renderEditingRow()
@@ -229,14 +225,6 @@ class FkInputMethodService : InputMethodService() {
         if (showPicker || !switchToPreviousInputMethod()) {
             (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
         }
-    }
-
-    private fun renderNineKey() {
-        addRow(listOf("，", "1", "2 ABC", "3 DEF", "⌫"), listOf(1f, 1f, 1.5f, 1.5f, 1f))
-        addRow(listOf("。", "4 GHI", "5 JKL", "6 MNO", "重输"), listOf(1f, 1.5f, 1.5f, 1.5f, 1f))
-        addRow(listOf("？", "7 PQRS", "8 TUV", "9 WXYZ", "↵"), listOf(1f, 1.5f, 1.5f, 1.5f, 1f))
-        addRow(listOf("！", "符", "123", "0 · 语音", "空格", "中/英"),
-            listOf(1f, 1f, 1f, 1.6f, 2f, 1.2f))
     }
 
     private fun renderFullKey() {
@@ -433,8 +421,8 @@ class FkInputMethodService : InputMethodService() {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         labels.forEachIndexed { index, label ->
             val button = key(label, weights[index]) { handleKey(label) }
-            if (label == "0 · 语音" || label == "空格 · 语音") {
-                voiceGesture(button) { handleKey(if (label.startsWith("0")) "0" else "空格") }
+            if (label == "空格 · 语音") {
+                voiceGesture(button) { handleKey("空格") }
             } else if (label == "⌫") {
                 repeatDeleteGesture(button)
             }
@@ -482,10 +470,9 @@ class FkInputMethodService : InputMethodService() {
             }
             "⇧" -> { shift = !shift; renderKeyboard() }
             else -> {
-                val value = if (label.length > 1 && label[0] in '2'..'9') label.take(1) else label
+                val value = label
                 if (panel == Panel.LETTERS && chinese && !secureField &&
-                    ((layout == KeyboardLayout.NINE_KEY && value[0] in '2'..'9') ||
-                        (layout == KeyboardLayout.FULL_KEY && value.length == 1 && value[0] in 'a'..'z'))
+                    value.length == 1 && value[0] in 'a'..'z'
                 ) {
                     speechResult = null
                     composition.insert(value)
@@ -568,20 +555,21 @@ class FkInputMethodService : InputMethodService() {
         val rawForLengths = composition.raw
         val spoken = speechResult
         val chosen = selectedPinyin
-        val currentLayout = layout
         worker.execute {
             val terms = store.terms()
             val foundGroups = if (spoken != null) listOf(
                 PinyinGroup("", listOf(WordCandidate(spoken, "", 0)), 0.0)
-            ) else if (input.length < rawForLengths.length) activeEngine.exactGroups(input, currentLayout)
-            else activeEngine.groups(input, currentLayout)
-            val validLengths = if (spoken == null) activeEngine.segmentLengths(rawForLengths, currentLayout)
+            ) else if (input.length < rawForLengths.length) activeEngine.exactGroups(input)
+            else activeEngine.groups(input)
+            val validLengths = if (spoken == null) activeEngine.segmentLengths(rawForLengths)
                 else emptyList()
             val group = foundGroups.firstOrNull { it.pinyin == chosen } ?: foundGroups.firstOrNull()
             val ranked = group?.let {
                 if (spoken == null) store.ordered(it.pinyin, it.candidates) else it.candidates
             }.orEmpty()
-            val generated = ranked.firstOrNull()?.let { activeRules.homophones(it.text, terms) }.orEmpty()
+            val generated = ranked.map {
+                activeRules.homophones(it.text, terms, limit = 1, pinyin = it.pinyin).firstOrNull()
+            }
             val firstIsSensitive = ranked.firstOrNull()?.let {
                 sensitivePositions(it.text, terms).isNotEmpty()
             } ?: false
@@ -629,9 +617,16 @@ class FkInputMethodService : InputMethodService() {
             groupStrip.addView(label)
         }
         topCandidates.removeAllViews()
-        homophones.forEach { word -> topCandidates.addView(candidateView(word, false) {
-            commitCandidate(word, false)
-        }) }
+        homophones.forEachIndexed { index, word ->
+            topCandidates.addView(candidateView(word ?: "—", false) {
+                if (word != null) commitCandidate(word, false)
+            }.apply {
+                isEnabled = word != null
+                contentDescription = if (word == null) "${normal[index].text} 没有同音同调的谐音候选"
+                    else "谐音候选 $word，对应正常候选 ${normal[index].text}"
+                if (word == null) setTextColor(Color.GRAY)
+            })
+        }
         normalCandidates.removeAllViews()
         normal.forEach { item ->
             normalCandidates.addView(candidateView(item.text, true) {
@@ -705,7 +700,7 @@ class FkInputMethodService : InputMethodService() {
             return false
         }
         val word = homophones.firstOrNull() ?: normal.firstOrNull()?.text
-        if (homophones.isEmpty() && sensitiveFirst) {
+        if (homophones.firstOrNull() == null && sensitiveFirst) {
             notice("没有可用谐音，请手动选择正常候选")
             return false
         }

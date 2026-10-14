@@ -3,8 +3,6 @@ package uk.cassiangroup.fkinput.core
 import android.content.Context
 import kotlin.math.ln
 
-enum class KeyboardLayout { NINE_KEY, FULL_KEY }
-
 data class WordCandidate(
     val text: String,
     val pinyin: String,
@@ -17,72 +15,69 @@ data class PinyinGroup(
     val score: Double,
 )
 
-/**
- * Loads the Apache-licensed simplified Pinyin dictionary. It also provides an on-device
- * conversion path while the optional native Rime backend is unavailable.
- */
+/** Local word frequencies with Rime sentence conversion and an offline fallback. */
 class PinyinEngine(context: Context) {
     private val roman = HashMap<String, MutableList<WordCandidate>>()
-    private val nine = HashMap<String, MutableList<WordCandidate>>()
     private val byText = HashMap<String, MutableList<WordCandidate>>()
     private val native = runCatching { NativeRime(context) }.getOrNull()
 
     init {
-        context.assets.open("data/pinyin_simp.dict.yaml").bufferedReader().use { reader ->
-            var inEntries = false
-            reader.forEachLine { line ->
-                if (!inEntries) {
-                    if (line == "...") inEntries = true
-                    return@forEachLine
+        for (dictionary in listOf("pinyin_simp", "conversation")) {
+            context.assets.open("data/$dictionary.dict.yaml").bufferedReader().use { reader ->
+                var inEntries = false
+                reader.forEachLine { line ->
+                    if (!inEntries) {
+                        if (line == "...") inEntries = true
+                        return@forEachLine
+                    }
+                    val fields = line.split('\t')
+                    if (fields.size < 3) return@forEachLine
+                    val spelling = fields[1].trim().lowercase()
+                    val compact = compact(spelling)
+                    val weight = fields[2].toIntOrNull() ?: 0
+                    if (compact.isEmpty() || !compact.all { it in 'a'..'z' }) return@forEachLine
+                    val candidate = WordCandidate(fields[0], spelling, weight)
+                    roman.getOrPut(compact) { ArrayList() }.add(candidate)
+                    byText.getOrPut(candidate.text) { ArrayList() }.add(candidate)
                 }
-                val fields = line.split('\t')
-                if (fields.size < 3) return@forEachLine
-                val spelling = fields[1].trim().lowercase()
-                val compact = spelling.replace(" ", "").replace("'", "")
-                val weight = fields[2].toIntOrNull() ?: 0
-                if (compact.isEmpty() || !compact.all { it in 'a'..'z' }) return@forEachLine
-                val candidate = WordCandidate(fields[0], spelling, weight)
-                roman.getOrPut(compact) { ArrayList() }.add(candidate)
-                nine.getOrPut(toNineKey(compact)) { ArrayList() }.add(candidate)
-                byText.getOrPut(candidate.text) { ArrayList() }.add(candidate)
             }
         }
         roman.values.forEach { it.sortByDescending(WordCandidate::weight) }
-        nine.values.forEach { it.sortByDescending(WordCandidate::weight) }
     }
 
-    fun groups(rawInput: String, layout: KeyboardLayout): List<PinyinGroup> {
-        val input = rawInput.lowercase().filter {
-            if (layout == KeyboardLayout.NINE_KEY) it in '2'..'9' else it in 'a'..'z'
-        }
+    fun groups(rawInput: String): List<PinyinGroup> {
+        val input = rawInput.lowercase().filter { it in 'a'..'z' }
         if (input.isEmpty()) return emptyList()
-        val index = if (layout == KeyboardLayout.NINE_KEY) nine else roman
-        val exact = index[input].orEmpty()
+        val exact = roman[input].orEmpty()
         val combined = ArrayList<WordCandidate>()
-        native?.candidates(input, layout)?.forEachIndexed { position, text ->
-            val match = byText[text]?.firstOrNull { entry ->
-                val compact = entry.pinyin.replace(" ", "").replace("'", "")
-                val keys = if (layout == KeyboardLayout.NINE_KEY) toNineKey(compact) else compact
-                keys.startsWith(input)
-            }
+        // Complete dictionary words always precede generated sentences and completions.
+        combined.addAll(exact.map { it.copy(weight = 1_500_000_000 + it.weight) })
+        native?.candidates(input)?.forEachIndexed { position, text ->
+            val match = byText[text]?.firstOrNull { compact(it.pinyin).startsWith(input) }
             if (match != null) {
-                combined.add(match.copy(weight = Int.MAX_VALUE - position))
+                if (compact(match.pinyin) != input) {
+                    combined.add(match.copy(weight = 1_000_000_000 - position))
+                }
+            } else if (exact.isEmpty()) {
+                // Rime sentences need not exist as whole entries in the dictionary.
+                spellingFor(text, input)?.let { spelling ->
+                    combined.add(WordCandidate(text, spelling, 500_000_000 - position))
+                }
             }
         }
-        combined.addAll(exact)
-        if (input.length <= 24) combined.addAll(compose(input, index))
+        if (combined.isEmpty() && input.length <= 48) combined.addAll(compose(input))
         if (combined.size < 60) {
-            index.asSequence()
+            roman.asSequence()
                 .filter { (key, _) -> key.startsWith(input) && key != input }
                 .flatMap { (_, values) -> values.asSequence().take(2) }
                 .sortedByDescending(WordCandidate::weight)
                 .take(80)
-                .forEach(combined::add)
+                .forEach { combined.add(it.copy(weight = 750_000_000 + it.weight)) }
         }
         return combined.groupBy(WordCandidate::pinyin)
             .map { (pinyin, words) ->
-                val unique = words.distinctBy(WordCandidate::text)
-                    .sortedByDescending(WordCandidate::weight)
+                val unique = words.sortedByDescending(WordCandidate::weight)
+                    .distinctBy(WordCandidate::text)
                     .take(40)
                 PinyinGroup(pinyin, unique, unique.firstOrNull()?.weight?.toDouble() ?: 0.0)
             }
@@ -91,63 +86,60 @@ class PinyinEngine(context: Context) {
     }
 
     /** Dictionary-backed boundaries for selecting a leading word in a longer composition. */
-    fun segmentLengths(rawInput: String, layout: KeyboardLayout): List<Int> {
-        val index = if (layout == KeyboardLayout.NINE_KEY) nine else roman
-        return (1 until rawInput.length).filter { index.containsKey(rawInput.substring(0, it)) } + rawInput.length
-    }
+    fun segmentLengths(rawInput: String): List<Int> =
+        (1 until rawInput.length).filter { roman.containsKey(rawInput.substring(0, it)) } + rawInput.length
 
-    fun exactGroups(rawInput: String, layout: KeyboardLayout): List<PinyinGroup> =
-        groups(rawInput, layout).filter { group ->
-            val spelling = group.pinyin.replace(" ", "").replace("'", "")
-            val keys = if (layout == KeyboardLayout.NINE_KEY) toNineKey(spelling) else spelling
-            keys == rawInput
-        }
+    fun exactGroups(rawInput: String): List<PinyinGroup> =
+        groups(rawInput).filter { compact(it.pinyin) == rawInput }
 
     fun close() = native?.close()
 
-    private fun compose(
-        input: String,
-        index: Map<String, List<WordCandidate>>,
-    ): List<WordCandidate> {
-        val memo = HashMap<Int, List<WordCandidate>>()
-        fun at(position: Int): List<WordCandidate> {
-            if (position == input.length) return listOf(WordCandidate("", "", 1))
+    private fun spellingFor(text: String, input: String): String? {
+        val failed = HashSet<Pair<Int, Int>>()
+        fun at(character: Int, key: Int): String? {
+            if (character == text.length) return if (key == input.length) "" else null
+            if (!failed.add(character to key)) return null
+            for (end in text.length downTo character + 1) {
+                for (entry in byText[text.substring(character, end)].orEmpty()) {
+                    val spelling = compact(entry.pinyin)
+                    if (end == text.length && key < input.length && spelling.startsWith(input.substring(key))) {
+                        return entry.pinyin
+                    }
+                    if (!input.startsWith(spelling, key)) continue
+                    val tail = at(end, key + spelling.length) ?: continue
+                    return if (tail.isEmpty()) entry.pinyin else "${entry.pinyin} $tail"
+                }
+            }
+            return null
+        }
+        return at(0, 0)
+    }
+
+    private fun compose(input: String): List<WordCandidate> {
+        data class Phrase(val text: String, val pinyin: String, val score: Double)
+        val memo = HashMap<Int, List<Phrase>>()
+        val totalWeight = roman.values.sumOf { words -> words.sumOf { it.weight.toDouble() + 1 } }
+        fun at(position: Int): List<Phrase> {
+            if (position == input.length) return listOf(Phrase("", "", 0.0))
             memo[position]?.let { return it }
-            val results = ArrayList<WordCandidate>()
-            for (end in position + 1..minOf(input.length, position + 12)) {
-                val heads = index[input.substring(position, end)].orEmpty().take(6)
+            val results = ArrayList<Phrase>()
+            for (end in position + 1..input.length) {
+                val heads = roman[input.substring(position, end)].orEmpty().take(6)
                 if (heads.isEmpty()) continue
                 val tails = at(end).take(6)
                 for (head in heads) for (tail in tails) {
-                    val spelling = if (tail.pinyin.isEmpty()) head.pinyin
-                    else "${head.pinyin} ${tail.pinyin}"
-                    val score = (ln(head.weight + 1.0) + ln(tail.weight + 1.0)) * 1000
-                    results.add(
-                        WordCandidate(head.text + tail.text, spelling, score.toInt())
-                    )
+                    val spelling = if (tail.pinyin.isEmpty()) head.pinyin else "${head.pinyin} ${tail.pinyin}"
+                    results.add(Phrase(head.text + tail.text, spelling,
+                        ln((head.weight + 1.0) / totalWeight) + tail.score))
                 }
             }
-            return results.distinctBy { it.text to it.pinyin }
-                .sortedByDescending(WordCandidate::weight)
+            return results.sortedByDescending(Phrase::score)
+                .distinctBy { it.text to it.pinyin }
                 .take(24)
                 .also { memo[position] = it }
         }
-        return at(0).filter { it.text.isNotEmpty() }
+        return at(0).map { WordCandidate(it.text, it.pinyin, (1_000_000 + it.score * 1000).toInt()) }
     }
 
-    companion object {
-        private val digitMap = mapOf(
-            'a' to '2', 'b' to '2', 'c' to '2',
-            'd' to '3', 'e' to '3', 'f' to '3',
-            'g' to '4', 'h' to '4', 'i' to '4',
-            'j' to '5', 'k' to '5', 'l' to '5',
-            'm' to '6', 'n' to '6', 'o' to '6',
-            'p' to '7', 'q' to '7', 'r' to '7', 's' to '7',
-            't' to '8', 'u' to '8', 'v' to '8',
-            'w' to '9', 'x' to '9', 'y' to '9', 'z' to '9',
-        )
-
-        fun toNineKey(pinyin: String): String =
-            pinyin.lowercase().filter { it in 'a'..'z' }.mapNotNull(digitMap::get).joinToString("")
-    }
+    private fun compact(pinyin: String) = pinyin.replace(" ", "").replace("'", "")
 }

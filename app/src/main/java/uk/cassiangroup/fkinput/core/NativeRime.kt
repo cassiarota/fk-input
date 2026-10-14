@@ -15,25 +15,23 @@ class NativeRime(context: Context) {
         listOf(
             "default.yaml",
             "fk_pinyin.schema.yaml",
-            "fk_nine.schema.yaml",
             "pinyin_simp.dict.yaml",
+            "conversation.dict.yaml",
         ).forEach { name ->
             val destination = File(shared, name)
-            if (!destination.exists()) {
-                context.assets.open("data/$name").use { source ->
-                    destination.outputStream().use(source::copyTo)
-                }
+            val data = context.assets.open("data/$name").use { it.readBytes() }
+            if (!destination.exists() || !destination.readBytes().contentEquals(data)) {
+                destination.writeBytes(data)
             }
         }
         check(nativeInit(shared.absolutePath, user.absolutePath)) { "Rime initialization failed" }
     }
 
-    fun candidates(input: String, layout: KeyboardLayout): List<String> =
-        nativeCandidates(input, layout == KeyboardLayout.NINE_KEY).toList()
+    fun candidates(input: String): List<String> = nativeCandidates(input).toList()
 
     fun close() = nativeClose()
 
     private external fun nativeInit(sharedPath: String, userPath: String): Boolean
-    private external fun nativeCandidates(input: String, nineKey: Boolean): Array<String>
+    private external fun nativeCandidates(input: String): Array<String>
     private external fun nativeClose()
 }

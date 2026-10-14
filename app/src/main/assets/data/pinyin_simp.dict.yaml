@@ -9,8 +9,10 @@
 
 ---
 name: pinyin_simp
-version: "0.1"
+version: "2026.10.14"
 sort: by_weight
+import_tables:
+  - conversation
 ...
 
 鼥	ba	0

@@ -11,6 +11,8 @@
 | yaml-cpp | Static dependency of librime | MIT | [jbeder/yaml-cpp](https://github.com/jbeder/yaml-cpp) |
 | rime-pinyin-simp | Pinyin dictionary and word frequencies | Apache-2.0 | [rime/rime-pinyin-simp](https://github.com/rime/rime-pinyin-simp/tree/0c6861ef7420ee780270ca6d993d18d4101049d0), commit `0c6861ef7420ee780270ca6d993d18d4101049d0`; its dictionary notes derivation from AOSP PinyinIME |
 | Unihan 17.0.0 `kMandarin` | Pronunciations converted to `readings.tsv` at build time | Unicode License v3 | [Unicode Unihan data](https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip) |
+| pypinyin 0.55.0 | Offline generation of contextual phrase tones in `phrase_readings.tsv`; no Android runtime dependency | MIT | [mozillazg/python-pinyin](https://github.com/mozillazg/python-pinyin/tree/v0.55.0) |
+| pinyin-data / phrase-pinyin-data | Character and phrase pronunciations used by the generator | MIT | [pinyin-data](https://github.com/mozillazg/pinyin-data/tree/fa9761fff402f8560196b1ba085c437c52b56d7c), [phrase-pinyin-data](https://github.com/mozillazg/phrase-pinyin-data/tree/cee0ed6e6e4898580cafd2bd5e3723e20b214aa0), pinned by pypinyin 0.55.0 |
 | OkHttp / Okio | WSS client | Apache-2.0 | [square/okhttp](https://github.com/square/okhttp) / [square/okio](https://github.com/square/okio); OkHttp 4.12.0 |
 | Kotlin standard library | Android client | Apache-2.0 | [JetBrains/kotlin](https://github.com/JetBrains/kotlin); version 2.2.20 |
 | sensitive-stop-words | Bundled default sensitive-word entries | Apache-2.0 | [fwwdn/sensitive-stop-words](https://github.com/fwwdn/sensitive-stop-words), commit `a7d06bb1c321e669943b6841570d9da6dad8ce2b` |

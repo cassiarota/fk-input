@@ -4,7 +4,6 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
-import uk.cassiangroup.fkinput.core.KeyboardLayout
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
@@ -15,17 +14,6 @@ import javax.crypto.spec.GCMParameterSpec
 
 class InputPreferences(context: Context) {
     private val prefs = context.getSharedPreferences("input", Context.MODE_PRIVATE)
-
-    fun layout(landscape: Boolean): KeyboardLayout {
-        val fallback = if (landscape) KeyboardLayout.FULL_KEY else KeyboardLayout.NINE_KEY
-        return runCatching {
-            KeyboardLayout.valueOf(prefs.getString(if (landscape) "landscape" else "portrait", null) ?: "")
-        }.getOrDefault(fallback)
-    }
-
-    fun setLayout(landscape: Boolean, value: KeyboardLayout) {
-        prefs.edit().putString(if (landscape) "landscape" else "portrait", value.name).apply()
-    }
 
     fun speechEndpoint(): String? = decrypt("speech_endpoint")
 

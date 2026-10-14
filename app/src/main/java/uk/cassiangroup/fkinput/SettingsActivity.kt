@@ -164,7 +164,7 @@ class SettingsActivity : Activity() {
         })
 
         root.addView(section("输入习惯"))
-        root.addView(info("选择第二行候选时，只向前移动一位。九键与全键共享同拼音组合的顺序。"))
+        root.addView(info("拼音统一使用26键。上下两行候选逐项对应并同步横滑，谐音仅替换同音同调的字。选择第二行候选时，只向前移动一位。"))
         root.addView(action("重置候选排序") {
             AlertDialog.Builder(this)
                 .setMessage("清空所有已学习的候选顺序？词库不会删除。")

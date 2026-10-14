@@ -1,0 +1,118 @@
+# FK Input common conversation and gaming phrases, maintained by this project.
+---
+name: conversation
+version: "2026.10.14"
+sort: by_weight
+...
+妈的	ma de	10000
+卧槽	wo cao	8000
+我靠	wo kao	6000
+我操	wo cao	5000
+操你妈	cao ni ma	5000
+他妈的	ta ma de	10000
+你妈的	ni ma de	5000
+他奶奶的	ta nai nai de	3000
+傻逼	sha bi	6000
+傻屌	sha diao	3000
+混蛋	hun dan	5000
+王八蛋	wang ba dan	5000
+神经病	shen jing bing	5000
+去你的	qu ni de	5000
+滚蛋	gun dan	5000
+滚开	gun kai	5000
+闭嘴	bi zui	5000
+别闹	bie nao	5000
+别急	bie ji	5000
+别催	bie cui	3000
+干嘛	gan ma	8000
+咋了	za le	5000
+咋回事	za hui shi	4000
+搞什么	gao shen me	5000
+搞啥	gao sha	3000
+搞错了	gao cuo le	5000
+搞定了	gao ding le	5000
+真的假的	zhen de jia de	5000
+真服了	zhen fu le	5000
+无语了	wu yu le	5000
+笑死了	xiao si le	5000
+笑死我了	xiao si wo le	5000
+气死我了	qi si wo le	5000
+太离谱了	tai li pu le	5000
+离谱	li pu	8000
+牛逼	niu bi	6000
+牛啊	niu a	3000
+牛批	niu pi	3000
+垃圾	la ji	8000
+菜鸡	cai ji	3000
+坑爹	keng die	3000
+队友	dui you	8000
+猪队友	zhu dui you	4000
+开黑	kai hei	5000
+挂机	gua ji	6000
+掉线	diao xian	6000
+卡了	ka le	5000
+卡住了	ka zhu le	5000
+卡死了	ka si le	5000
+别送	bie song	3000
+别送了	bie song le	3000
+一起上	yi qi shang	5000
+快跑	kuai pao	5000
+快点	kuai dian	8000
+等一下	deng yi xia	8000
+等会儿	deng hui er	5000
+马上来	ma shang lai	5000
+我来了	wo lai le	8000
+我今天	wo jin tian	18000
+收到	shou dao	10000
+没事	mei shi	10000
+没关系	mei guan xi	10000
+没问题	mei wen ti	10000
+没办法	mei ban fa	10000
+没啥	mei sha	5000
+好的	hao de	20000
+好吧	hao ba	10000
+好啊	hao a	8000
+好啦	hao la	8000
+好嘞	hao lei	5000
+行吧	xing ba	8000
+算了	suan le	10000
+算了吧	suan le ba	8000
+不行	bu xing	10000
+不急	bu ji	8000
+不用了	bu yong le	10000
+不好意思	bu hao yi si	10000
+对不起	dui bu qi	10000
+谢谢	xie xie	20000
+谢谢你	xie xie ni	10000
+不客气	bu ke qi	10000
+辛苦了	xin ku le	10000
+麻烦你了	ma fan ni le	8000
+知道了	zhi dao le	10000
+明白了	ming bai le	10000
+我知道	wo zhi dao	10000
+我不知道	wo bu zhi dao	10000
+不知道	bu zhi dao	10000
+为什么	wei shen me	10000
+什么意思	shen me yi si	10000
+怎么回事	zen me hui shi	10000
+怎么了	zen me le	10000
+怎么办	zen me ban	10000
+怎么样	zen me yang	10000
+可以吗	ke yi ma	10000
+可以的	ke yi de	10000
+可以了	ke yi le	10000
+回头聊	hui tou liao	5000
+待会儿见	dai hui er jian	5000
+一会儿见	yi hui er jian	5000
+下次再说	xia ci zai shuo	5000
+再说吧	zai shuo ba	5000
+晚安	wan an	8000
+早上好	zao shang hao	8000
+晚上好	wan shang hao	5000
+你好啊	ni hao a	8000
+你好呀	ni hao ya	8000
+在吗	zai ma	10000
+在干嘛	zai gan ma	8000
+你好吗	ni hao ma	8000
+吃了吗	chi le ma	8000
+吃饭了吗	chi fan le ma	8000
